@@ -3,6 +3,7 @@ import argparse
 import os
 import graphviz
 import textwrap
+import igraph
 
 from psycopg2 import Error
 from psycopg2.extras import RealDictCursor
@@ -14,14 +15,16 @@ def display(elems):
 EPILOG = f"""
 Available formats are: {display(graphviz.FORMATS)}
 
-The include option allow you to focus the graph on just some specific
-relations or processes. The option accept a list of inclusion
-designators and can be given multiple times. The graph produced will
-contain all processes and relations that are connected with any of the
-processes or relations given in the list. It defaults to display all
-processes and relations.
+The `include` option allow you to focus the graph on just some
+specific relations or processes. The option accept a list of inclusion
+designators and can be given multiple times. It defaults to display
+all processes and relations.
 
-The accepted formats for the designators are:
+The graph produced will contain all processes and relations that are
+connected with any of the processes or relations given in the list,
+but some of the relations or processes can be excluded as well. If any
+objects are excluded, only they are removed and not connected
+components.
 
 pid:<pid>
    Focus on process with PID <pid>
@@ -31,6 +34,9 @@ pid:/<regexp>/
 
 rel:<oid>
    Focus on the relation with OID <oid>
+
+rel:<name>
+   Focus on the relation with name <name>
 
 rel:<name>
    Focus on the relation with name <name>
@@ -66,41 +72,57 @@ def parse_arguments():
                         help="format for emitted graph (default is 'png')")
     return parser.parse_args()
 
+# Select all locks that are available in the current database which
+# are not related to the connecting session.
+#
+# The connecting session just execute this statement so those locks
+# are uninteresting, and locks in other databases will not show
+# properly so that is not useful either.
 SELECT_ALL_LOCKS = """
 SELECT pid, relation, relation::regclass, mode, granted, query
   FROM pg_locks JOIN pg_stat_activity USING (pid)
- WHERE locktype = 'relation';
+ WHERE locktype = 'relation'
+   AND pid != pg_backend_pid()
+   AND database = (SELECT oid FROM pg_database WHERE datname = current_database())
 """
 
 def build_lock_graph(conn):
     """Build lock graph.
 
-    Build lock graph from a connector and a set of filters.
+    Build lock graph from a connector and a set of filters. The
+    filters will be used locally and not incorporated into the query.
+
+    Parameters:
     """
     cursor = conn.cursor()
+    cursor.execute("SELECT current_database()")
+    print("Connected to database", cursor.fetchall())
+
     cursor.execute(SELECT_ALL_LOCKS)
     if cursor.rowcount == 0:
         raise "No locks to display"
-    
+
     dot = graphviz.Digraph(f'{args.dbname}_lock_graph', format=args.format)
+    full = igraph.Graph()
     for pid, reloid, relation, mode, granted, query in cursor:
-        # Here we want to filter out any nodes that are not related to
-        # a specific relation or process. This means building a graph
-        # of all the nodes, and then use the connectivity to filter
-        # out nodes.
         procname = f'PID{pid}'
-        relname = f'REL{reloid}' 
+        relname = f'REL{reloid}'
+        full.add_vertex(procname, label=f'PID {pid}\\n{query}', kind='process')
+        full.add_vertex(relname, label=relation, kind='relation')
+        full.add_edge(procname, relname, granted=granted)
+
+
+
         dot.node(procname, f'PID {pid}\\n{query}', shape='box', peripheries='2')
         dot.node(relname, relation, shape='box')
         dot.edge(procname, relname, label=mode, style=('solid' if granted else 'dashed'))
+
 
     return dot.render()
 
 if __name__ == '__main__':
     args = parse_arguments()
-    
-    kwrds = {'dbname': args.dbname, 'user': args.user }
-    kwrds['host'] = '/tmp' if args.host is None else args.host
-    conn = psycopg2.connect(**kwrds)
+    conn = psycopg2.connect(dbname=args.dbname, user=args.user,
+                            host=('/tmp' if args.host is None else args.host))
 
     print(build_lock_graph(conn))
