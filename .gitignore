@@ -1,3 +1,7 @@
 *.pyc
 *.pyo
 *~
+
+# Setuptools directories and files
+build/**
+*.egg-info
