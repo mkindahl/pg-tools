@@ -23,7 +23,11 @@ pip install .
 ## Show locking graph using `pg-lock-graph`
 
 The tool `pg-lock-graph` will show a graph of all locks in a database
-as a graph with edges between processes and relations.
+as a graph with edges between processes and relations. It can be used
+to either get a full locking graph of the system (with the exception
+of the session that connects to read the locking graph), or limit the
+graph to only the nodes involved in a deadlock.
 
-
-
+To print the subgraph(s) involving a deadlock, all edges that represents
+locks that are not granted are collected and the induced subgraph
+consisting of the vertices attached to those edges are built.
