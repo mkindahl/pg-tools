@@ -27,9 +27,9 @@ def parse_arguments(description):
     parser.add_argument('-U', '--username', dest='user',
                         default=(os.getenv("PGUSER") or os.getlogin()),
                         help='user name to connect as')
+    parser.add_argument('--password', dest='password',
+                        help='optional password of the user to connect as')
     parser.add_argument('-d', '--dbname', metavar='DBNAME', dest='dbname',
-                        help='name of the database to read locking information from')
-    parser.add_argument('dbname', metavar='DBNAME', nargs='?',
                         default=(os.getenv("PGDATABASE") or os.getlogin()),
                         help='name of the database to read locking information from')
     parser.add_argument('-p', '--port', metavar='PORT',
@@ -50,6 +50,7 @@ def main():
     """Get lock graph from PostgreSQL instance."""
     args = parse_arguments(main.__doc__)
     conn = psycopg2.connect(dbname=args.dbname, user=args.user,
+                            password=(None if args.password is None else args.password),
                             host=('/tmp' if args.host is None else args.host))
     lgraph = LockGraph()
     lgraph.build(conn)
