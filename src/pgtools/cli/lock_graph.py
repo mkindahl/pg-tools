@@ -51,7 +51,7 @@ def main():
     args = parse_arguments(main.__doc__)
     conn = psycopg2.connect(dbname=args.dbname, user=args.user,
                             password=(None if args.password is None else args.password),
-                            host=('/tmp' if args.host is None else args.host))
+                            host=args.host)
     lgraph = LockGraph()
     lgraph.build(conn)
     lgraph.apply_filters(args.filters)
