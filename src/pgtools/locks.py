@@ -28,8 +28,22 @@ def deadlock_filter(graph):
     vertices = {v for e in edges for v in [e.source, e.target]}
     return graph.induced_subgraph(vertices)
 
+
+def conflicts_filter(graph):
+    """Get subgraph of nodes connected to a conflict.
+
+    Find all vertices that have an incoming edge that is not
+    granted. Collect the neighbourhood of the vertices, and get the
+    induced subgraph from those vertices.
+    """
+    edges = graph.es.select(granted_eq=False)
+    vertices = [e.target for e in edges]
+    neighborhood = sum(graph.neighborhood(vertices), [])
+    return graph.induced_subgraph(neighborhood)
+
 FILTERS = {
     'deadlock': deadlock_filter,
+    'conflicts': conflicts_filter,
 }
 
 class LockGraph:
@@ -52,16 +66,17 @@ class LockGraph:
         print(self.__dbname)
 
         cursor.execute(SELECT_ALL_LOCKS)
-        for pid, reloid, relname, mode, granted, query in cursor:
-            procname = f'PID{pid}'
-            relname = f'REL{reloid}'
-            self.__graph.add_vertex(procname, label=f'PID {pid}\\n{query}',
-                                    kind='process', pid=pid, query=query)
-            self.__graph.add_vertex(relname, label=relname,
-                                    kind='relation', reloid=reloid,
-                                    relation=relname)
-            self.__graph.add_edge(procname, relname,
+        for pid, reloid, rlabel, mode, granted, query in cursor:
+            procnode = f'PID{pid}'
+            relnode = f'REL{reloid}'
+            plabel = f'PID {pid}\\n{query}'
+            self.__graph.add_vertex(procnode, label=plabel, kind='process',
+                                    pid=pid, query=query)
+            self.__graph.add_vertex(relnode, label=rlabel, kind='relation',
+                                    reloid=reloid, relation=rlabel)
+            self.__graph.add_edge(procnode, relnode,
                                   granted=granted, mode=mode)
+        conn.commit()
 
     def apply_filters(self, filters):
         """Apply filters to locking graph.

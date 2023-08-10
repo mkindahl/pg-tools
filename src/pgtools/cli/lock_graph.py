@@ -7,7 +7,7 @@ import graphviz
 import psycopg2
 
 from .. import __version__
-from ..locks import LockGraph
+from ..locks import LockGraph, FILTERS
 
 def display(elems):
     """Display a list of elements using Oxford comma."""
@@ -34,7 +34,7 @@ def parse_arguments(description):
                         help='name of the database to read locking information from')
     parser.add_argument('-p', '--port', metavar='PORT',
                         help='database server port number')
-    parser.add_argument('-f', '--filter', metavar='FILTER', choices=['deadlock'],
+    parser.add_argument('-f', '--filter', metavar='FILTER', choices=FILTERS,
                         nargs='+', dest='filters', default=[],
                         help='Apply filter to graph')
     parser.add_argument('-h', '--host', metavar='HOSTNAME',
